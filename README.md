@@ -1,59 +1,53 @@
-# Project Monitor
+# Project Monitor v2
 
-Aplikasi internal untuk monitoring project: login, reset password via email, create project (nama, deadline, status), dan calendar view.
+Aplikasi internal untuk monitoring project. Stack: Next.js (App Router) + Supabase (Auth + Database), deploy ke Vercel.
 
-Stack: Next.js (App Router) + Supabase (Auth + Database) + deploy ke Vercel.
+## Fitur
+
+- Login, Guest mode, show/hide password
+- Forgot password via email (reset ke halaman New Password + Confirm New Password, min 8 karakter)
+- List project: kolom No, ID Project (4 digit unik), Nama Project, Requestor, Divisi, Status
+- Filter (Divisi / Requestor / Status) + Search (ID atau nama project)
+- Add/Edit Project via popup: Judul, Objective, Expected Result, Requestor, Divisi (multi-select), Impact (Cost/Accuracy/Speed + detail per item), Requirements (rich text + tag ke project lain), Development Log (tanggal + judul + status)
+- Titik tiga per baris project: Edit / Delete / Ubah Status
+- Double-click baris -> halaman detail project, termasuk daftar development log (klik log -> popup detail, bisa Edit + Save)
+- Kanban view: drag & drop card antar kolom status (Completed / In Progress / Hold / Cancel / Backlog)
+- Calendar view: kalender bulan (atas) + list development log pada tanggal yang diklik (bawah)
 
 ## 1. Setup Supabase
 
-1. Buat akun & project baru di https://supabase.com (gratis).
-2. Buka **SQL Editor** di dashboard Supabase, copy-paste isi file `supabase/schema.sql`, lalu Run. Ini akan membuat tabel `projects` beserta Row Level Security policy-nya.
-3. Buka **Authentication -> Providers**, pastikan **Email** provider aktif (default sudah aktif).
-4. Buka **Authentication -> URL Configuration**, isi:
-   - **Site URL**: `http://localhost:3000` (nanti ganti ke domain production setelah deploy)
-   - **Redirect URLs**: tambahkan `http://localhost:3000/update-password` dan (setelah deploy) `https://domain-kamu.com/update-password`
-   - Ini penting supaya link reset password dari email mengarah ke halaman yang benar.
-5. Buka **Project Settings -> API**, catat:
-   - `Project URL` -> ini untuk `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon public` key -> ini untuk `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+1. Buat project baru di https://supabase.com (gratis).
+2. Buka **SQL Editor**, copy-paste isi `supabase/schema.sql`, Run. Ini membuat tabel `projects`, `development_logs`, dan semua RLS policy-nya (termasuk aturan guest hanya boleh lihat, tidak boleh edit/hapus).
+3. Aktifkan **Guest Mode**: buka **Authentication -> Sign In / Providers**, cari **Anonymous Sign-Ins**, aktifkan. Kalau ini tidak diaktifkan, tombol "Masuk sebagai Guest" akan error.
+4. Buka **Authentication -> URL Configuration**:
+   - **Site URL**: isi domain kamu (`http://localhost:3000` untuk lokal, atau domain Vercel untuk production)
+   - **Redirect URLs**: tambahkan `.../update-password` (baik untuk localhost maupun domain production) — wajib supaya link reset password mengarah ke halaman yang benar.
+5. Buka **Project Settings -> API**, catat `Project URL` dan `anon public` key.
 
 ## 2. Buat User Pertama
 
-Karena ini tool internal, user tidak sign-up sendiri. Buat user manual lewat:
-**Authentication -> Users -> Add user** (isi email + password, centang "Auto Confirm User").
+**Authentication -> Users -> Add user** — isi email + password, centang "Auto Confirm User". Ulangi untuk tiap anggota tim.
 
-Ulangi untuk setiap anggota tim yang butuh akses.
+## 3. Deploy ke Vercel
 
-## 3. Jalankan di Lokal
+1. Push semua file ini ke repo GitHub (drag & drop lewat github.com kalau tidak mau pakai command line).
+2. Import repo di vercel.com.
+3. Tambahkan Environment Variables: `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. Deploy. Setelah dapat domain, balik ke Supabase -> Authentication -> URL Configuration, update Site URL & Redirect URLs pakai domain production.
 
-```bash
-cp .env.local.example .env.local
-# isi NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY di .env.local
+## Struktur Halaman
 
-npm install
-npm run dev
-```
+- `/login` — login + guest mode + show/hide password
+- `/forgot-password` — kirim email reset
+- `/update-password` — set password baru (New Password + Confirm New Password)
+- `/dashboard` — list project + filter + search + add/edit modal
+- `/dashboard/project/[id]` — detail project + development log
+- `/dashboard/kanban` — board drag & drop per status
+- `/dashboard/calendar` — kalender + list development log per tanggal
 
-Buka http://localhost:3000 — akan redirect ke halaman login.
+## Catatan
 
-## 4. Deploy ke Vercel
-
-1. Push folder ini ke repo GitHub.
-2. Buka https://vercel.com -> New Project -> import repo tadi.
-3. Di bagian **Environment Variables**, tambahkan `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` (nilai sama seperti di `.env.local`).
-4. Deploy.
-5. Setelah dapat domain dari Vercel, balik lagi ke Supabase -> Authentication -> URL Configuration, update **Site URL** dan tambahkan **Redirect URL** dengan domain production (`https://domain-kamu.vercel.app/update-password`).
-
-## Struktur Fitur
-
-- `/login` — halaman login
-- `/forgot-password` — kirim link reset password ke email
-- `/update-password` — halaman set password baru (diakses dari link email)
-- `/dashboard` — form create project + daftar project (tabel)
-- `/dashboard/calendar` — tampilan kalender bulanan, project muncul di tanggal deadline-nya
-
-## Catatan Keamanan
-
-- Row Level Security sudah aktif di tabel `projects`: semua user yang login bisa **lihat** semua project (karena ini tool internal), tapi hanya bisa **edit/hapus** project yang dia buat sendiri. Kalau mau semua orang bisa edit project siapa saja, ubah policy `update`/`delete` di `supabase/schema.sql`.
-- Supabase Auth sudah handle hashing password, session, dan email reset password secara otomatis — tidak perlu implementasi manual.
-- Untuk 100 user, cukup pakai Supabase Free Tier (limit 50.000 MAU, jauh dari cukup).
+- ID Project (4 digit) dibuat otomatis & unik saat project baru dibuat.
+- Guest bisa login dan **lihat semua data**, tapi **tidak bisa** create/edit/delete/ubah status (dibatasi lewat Row Level Security di database, bukan cuma di tampilan — jadi aman meski guest coba akses API langsung).
+- Tag project di field Requirements murni referensi teks (bukan link ke halaman lain) — klik tombol "@ Tag Project" di toolbar untuk cari & sisipkan.
+- Kalau field development log di form Add/Edit project diisi kosong (tanggal/judul kosong), baris itu otomatis diabaikan saat submit.
